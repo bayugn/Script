@@ -6,10 +6,10 @@ h="\033[32;1m"
 clear
 function banner(){
 		echo -e "\t${p}_________________________"
-		echo -e "\t${h}  TOOLS SCANNING PROXY"
-		echo -e "\t${p}   Author${m}: ${p} Tuyul-Google "
-		echo -e "\t${p}    https://tuyul-google.blogspot.com"
-		echo -e "\t${p}    Recode bye RYAN CREATOR "
+		echo -e "\t${h}  <[[=[TOOL SCANNING PROXY]=]]>"
+		echo -e "\t${p}  <[[[=[[ RYAN  CREATOR ]]=]]]>"
+		echo -e "\t${p}  Author${m}: ${p} Tuyul-Google"
+		echo -e "\t${p}https://tuyul-google.blogspot.com"
 		echo -e "\t${p}_________________________"
 	   	
 }
