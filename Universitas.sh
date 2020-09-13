@@ -1,3 +1,4 @@
+#!/usr/xbim/bash
 # uncompyle6 version 3.6.7
 # Python bytecode 2.7
 # Decompiled from: Python 2.7.18 (default, Jul  8 2020, 22:53:57) 
@@ -20,11 +21,17 @@ no = '\x1b[0m'
 bold = '\x1b[1m'
 under = '\x1b[4m'
 
-def banner():
-    os.system('clear')
-    print yw + '' + bold + wh + '| ' + lg + 'Create By RYAN CREATOR'
-    print yw + '' + bold + wh + '| ' + lg + 'Tools Scanning Proxy Universitas'
-    print yw + '' + bold + wh + '| ' + lg + 'https://tuyul-google.blogspot.com\n' + wh
+clear
+function banner(){
+		echo -e "\t${p}_________________________________"
+		echo -e "\t${h}  <[[=[TOOL SCANNING PROXY]=]]>"
+		echo -e "\t${p}  <[[[=[[ RYAN  CREATOR ]]=]]]>"
+		echo -e "\t${p}  <[[[=[[ TUYUL  GOOGLE ]]=]]]>"
+		echo -e "\t${p}https://tuyul-google.blogspot.com"
+		echo -e "\t${p}_________________________________"
+	   	
+}
+banner
 
 
 def pas1():
