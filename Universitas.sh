@@ -1,4 +1,8 @@
-#!/usr/xbim/bash
+# uncompyle6 version 3.6.7
+# Python bytecode 2.7
+# Decompiled from: Python 2.7.18 (default, Jul  8 2020, 22:53:57) 
+# [GCC 4.2.1 Compatible Android (5220042 based on r346389c) Clang 8.0.7 (https://
+# Embedded file name: <febry>
 import os, re, requests, json, urllib, random, sys
 from time import sleep, strftime, localtime
 from bs4 import BeautifulSoup as sop
@@ -18,7 +22,7 @@ under = '\x1b[4m'
 
 def banner():
     os.system('clear')
-    print yw + '' + bold + wh + '| ' + lg + '<[[[=[[ Tuyul Google ]]=]]]>'
+    print yw + '' + bold + wh + '| ' + lg + 'Create By RYAN CREATOR'
     print yw + '' + bold + wh + '| ' + lg + 'Tools Scanning Proxy Universitas'
     print yw + '' + bold + wh + '| ' + lg + 'https://tuyul-google.blogspot.com\n' + wh
 
@@ -94,8 +98,8 @@ def main():
 
     os.system('touch open.txt')
     os.system('touch close.txt')
-    os.system('touch sakti.txt')
-    sk = open('sakti.txt', 'w')
+    os.system('touch good.txt')
+    sk = open('good.txt', 'w')
     op = open('open.txt', 'w')
     cl = open('close.txt', 'w')
     a = 0
