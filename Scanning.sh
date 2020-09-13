@@ -1,570 +1,442 @@
-#!/usr/bin/python
-# Imports
-import Queue
-import socket
-import time
-import base64
-from threading import Thread
-from threading import Lock
-from optparse import OptionParser
-from optparse import OptionGroup
-from netaddr import *
+# uncompyle6 version 3.6.7
+# Python bytecode 2.7
+# Decompiled from: Python 2.7.18 (default, Jul  8 2020, 22:53:57) 
+# [GCC 4.2.1 Compatible Android (5220042 based on r346389c) Clang 8.0.7 (https://
+# Embedded file name: <febry>
+import os, re, requests, json, urllib, random, sys
+from time import sleep, strftime, localtime
+from bs4 import BeautifulSoup as sop
+from requests.exceptions import ConnectionError as legh
+bl = '\x1b[0;34m'
+dg = '\x1b[1;30m'
+lb = '\x1b[1;34m'
+lg = '\x1b[1;32m'
+lc = '\x1b[1;36m'
+lr = '\x1b[1;31m'
+lp = '\x1b[1;35m'
+yw = '\x1b[1;33m'
+wh = '\x1b[1;37m'
+no = '\x1b[0m'
+bold = '\x1b[1m'
+under = '\x1b[4m'
 
-# Global lock to prevent threads from messing things up
-LOCK = Lock()
-
-# Global Print function for verbose options and thread-safe (we hope)..  Its not - refer next thread class thing to fix.
-def PrintMsg(message, verbose):
-	if verbose:
-		LOCK.acquire()
-		print message
-		LOCK.release()
-
-# This class will print messages...
-class PrintStuff(Thread):
-
-	# Class init and define class vars...
-	def __init__(self, qu):
-		Thread.__init__(self)
-		self.queue = qu
-		self.thrun = 1
-
-	# Called to shut down the thread...
-	def KillIt(self):
-		self.thrun = 0
-
-	# Main workhorse...
-	def run(self):
-		while self.thrun:
-			req = self.queue.get()
-			if req is None:
-				self.thrun = 0
-				break
-			PrintMsg(str(req), True)
-			
-# This class will be used for scanning networks via proxy...
-class Scanner(Thread):
-
-	# Class init and define class vars
-	def __init__(self, ph, pp, pu, pw, md, qu, pq):
-		Thread.__init__(self)
-		self.phost = ph
-		self.pport = pp
-		self.puser = pu
-		self.ppass = pw
-		self.smode = md
-		self.queue = qu
-		self.prnqu = pq
-		self.const = ""
-		if self.smode == "get":
-			self.const = "GET http://%s HTTP/1.0\r\nUser-Agent: python\r\n"
-		else:
-			self.const = "CONNECT %s HTTP/1.0\r\nUser-Agent: python\r\n"
-		if len(self.puser) > 0:
-			tmpstr = str(self.puser) + ":" + str(self.ppass)
-			tmpstr = base64.encodestring(tmpstr)
-			tmpstr = str(tmpstr).replace("\r", "").replace("\n", "")
-			self.const = self.const + "Proxy-Authorization: Basic " + str(tmpstr) + "\r\n"
-		self.const = self.const + "\r\n"
-			
-		self.thrun = 1
-		self.csock = None
-
-	# Get fixed length string
-	def StringLen(self, val):
-		retstr = str(val)
-		# We're working with IP addresses, so lets assume it is
-		# maximum length 15, plus colon, plus 5.  ie: 21 chars...
-		while len(retstr) < 21:
-			retstr = retstr + ' '
-		return retstr
-
-	# Called to shutdown the threads...
-	def KillIt(self):
-		self.thrun = 0
-
-	# Main workhorse is here...
-	def run(self):
-		time.sleep(1)
-		while self.thrun:
-			req	= self.queue.get()
-			if req is None:
-				if self.queue.empty():
-					self.prnqu.put(None)
-				self.thrun = 0
-				break
-			try:
-				self.csock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-				self.csock.connect((self.phost, self.pport))
-				self.csock.settimeout(10)
-				sendstr = self.const % (str(req))
-				self.csock.send(sendstr)
-				resp = ""
-				resp = self.csock.recv(1024)
-	                        if resp == '':
-					self.prnqu.put(self.StringLen(str(req)) + " : Proxy Connection Closed with no response...")
-                	               	self.csock.close()
-	                        else:
-					arstr = str(resp).replace("\r", "").split("\n")[0]
-					self.prnqu.put(self.StringLen(str(req)) + " : " + arstr)
-				self.csock.close()
-				self.csock = None
-			except socket.timeout:
-				self.prnqu.put(self.StringLen(str(req)) + " : Timeout speaking with Proxy")
-			
-			except:
-				self.prnqu.put(self.StringLen(str(req)) + " : Unspecified error")
-
-# This class will be used for tunneling data through proxy servers in tunnel mode...
-# Tunnelling code primarily done by Willem Mouton - willem@sensepost.com
-class Session(Thread):
-
-	# Class init and define class vars
-	def __init__(self, cs, ph, pp, pu, pw, rh, rp, vr):
-		Thread.__init__(self)
-		self.csock = cs
-		self.phost = ph
-		self.pport = pp
-		self.puser = pu
-		self.ppass = pw
-		self.rhost = rh
-		self.rport = rp
-		self.verbo = vr
-
-		self.iscon = False
-		self.psock = None
-		self.const = ""
-		self.const = "CONNECT %s:%d HTTP/1.0\r\nUser-Agent: python\r\n" % (self.rhost, self.rport)
-		if len(self.puser) > 0:
-			tmpstr = str(self.puser) + ":" + str(self.ppass)
-			tmpstr = base64.encodestring(tmpstr)
-			tmpstr = str(tmpstr).replace("\r", "").replace("\n", "")
-			self.const = self.const + "Proxy-Authorization: Basic " + str(tmpstr) + "\r\n"
-		self.const = self.const + "\r\n"
-		self.thrun = 0
-
-	# Called to shutdown the class
-	def KillIt(self):
-		self.thrun = 0
-
-	# The actual work-horse...
-	def run(self):
-		# We are only going to start the thread once the proxy has successfully negotiated the connection
-		self.thrun = 0
-		PrintMsg("    + Starting proxy connection to " + self.phost + ":" + str(self.pport) + "...", self.verbo)
-		# Try and connect to the proxy
-		try:
-			self.psock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-			self.psock.connect((self.phost, self.pport))
-		except:
-
-			print "ERROR: Could not connect to the proxy..."
-			print "ERROR: This is pretty much unrecoverable..."
-			print "ERROR: Sorry it didn't work out..."
-			self.csock.close()
-			exit(1)
-		PrintMsg("    + Connected to proxy.", self.verbo)
-		PrintMsg("    + Negotiating proxy connection && setting socket options...", self.verbo)
-		self.psock.send(self.const)
-		# We start by trying to negotiate our proxy connection...
-		try:
-			resp = self.psock.recv(1024)
-			if resp == '':
-				PrintMsg("    + Proxy connection closed.", self.verbo)
-				self.csock.close()
-				self.thrun = 0
-			else:
-				if str(resp).split("\n")[0].find("200") > -1:
-					self.iscon = True
-					self.thrun = 1
-					PrintMsg("    + Proxy connection negotiated.", self.verbo)
-				else:
-					print "ERROR: The proxy hates you with:"
-					print "ERROR: %s" %(str(resp).split("\n")[0].replace("\r", ""))
-					self.iscon = False
-					self.psock.close()
-					self.csock.close()
-					self.thrun = 0
-		except:
-			print "ERROR: Unspecified error whilst negotiating proxy connect..."
-			self.csock.close()
-			self.iscon = False
-			self.thrun = 0
-
-		# At this point, we can assume that our stuff has worked...
-		# So, we set our socket options...
-		if self.iscon:
-		
-			self.psock.setblocking(0)
-			self.csock.setblocking(0)
-			# And we run as long as neccessary...
-		   	while self.thrun:
-				# Check for proxy data and forward to local listener
-				try:
-					resp = self.psock.recv(1024)
-					if resp == '':
-						PrintMsg("    + Proxy connection closed.", self.verbo)
-						self.csock.close()
-						self.thrun = 0
-						break
-					i = self.csock.send(resp)
-					if i == 0:
-						PrintMsg("    + Local connection closed.", self.verbo)
-						self.psock.close()
-						self.thrun = 0
-						break
-					PrintMsg("    + PROXY -> LOCAL: " + str(i) + " bytes", self.verbo)
-				except:
-					pass
-				# Check for local listener data and forward to proxy
-				try:
-					resp = self.csock.recv(1024)
-					if resp == '':
-						PrintMsg("    + Local connection closed.", self.verbo)
-						self.psock.close()
-						self.thrun = 0
-						break
-					i = self.psock.send(resp)
-					if i == 0:
-						PrintMsg("    + Proxy connection closed.", self.verbo)
-						self.csock.close()
-						self.thrun = 0
-						break
-					PrintMsg("    + LOCAL -> PROXY: " + str(i) + " bytes", self.verbo)
-				except:
-					pass
-
-# Used to start the local listener when app is run in tunnel mode
-def StartTunnel(ph, pp, pu, pw, lh, lp, rh, rp, vr):
-	# Local variables
-	phost = ph
-	pport = pp
-	puser = pu
-	ppass = pw
-	lhost = lh
-	lport = lp
-	rhost = rh
-	rport = rp
-	verbo = vr
-	thrds = list()
-	thrun = 0
-	PrintMsg("  * Tunnel Settings", verbo)
-	PrintMsg("    + Local Listener IP    : " + lhost, verbo)
-	PrintMsg("    + Local Listener Port  : " + str(lport), verbo)
-	PrintMsg("    + Remote Host IP       : " + rhost, verbo)
-	PrintMsg("    + Remote Host Port     : " + str(rhost), verbo)
-	PrintMsg("", verbo)
-	# Establish the local listener...
-	try:
-		lsock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-		lsock.bind((lhost, lport))
-		lsock.listen(1)
-		print "  * Local listener listening on", lhost + ":" + str(lport)
-		thrun = 1
-		try:
-			while thrun:
-				(csock, addresss) = lsock.accept()
-				PrintMsg("    + Connect from : " + str(addresss), verbo)
-				session = Session(csock, phost, pport, puser, ppass, rhost, rport, verbo)
-				session.start()
-				thrds.append(session)
-		except KeyboardInterrupt:
-		        print "ERROR: Keyboard interrupt detected.  Shutting down..."
-		except:
-		        print "ERROR: Unspecified error in while loop."
-		finally:
-			# We want to kill all our threads...
-		        for i in thrds:
-				i.KillIt()
-			lsock.close()
-			thrun = 0
-		print "Shutting down...  Sleeping for 5 seconds..."
-		time.sleep(5)
-	except:
-		# Oops...  It didn't work... :(
-		print "ERROR: Error starting local listener.  Sorry it didn't work out..."
-		print "ERROR: If you're running this in  *nix and the port is < 1024, "
-		print "ERROR: are you sure you're running this as root ?"
-	return 1
-
-# Used to parse IP's...
-# Format is host,network/mask etc.  More than one can be specified on the cli, as long as they are seperated with ","
-def ParseIpRange(ip):
-	ReturnLst = list()
-	ReturnVal = 0
-	wrklist = list()
-	wrklist = str(ip).split(",")
-	for w in wrklist:
-		try:
-			the_range = IP(w).cidr()
-			for i in the_range:
-				if not ReturnLst.count(str(i)) > 0:
-					ReturnLst.append(str(i))
-		except:
-			ReturnVal = 1
-	return ReturnLst, ReturnVal
-
-# Used to parse Port Ranges...
-def ParsePortRange(pr):
-	ReturnLst = list()
-	ReturnVal = 0
-	wrklist = list()
-	wrklist = str(pr).split(",")
-	for w in wrklist:
-		try:
-			if str(w).find("-") > -1:
-				(n1, n2) = str(w).split("-")
-				stuff = range(int(n1), int(n2))
-				for j in stuff:
-					if not ReturnLst.count(int(j)) > 0:
-						ReturnLst.append(int(j))
-			else:
-				if not ReturnLst.count(int(w)) > 0:
-					ReturnLst.append(int(w))
-		except:
-			ReturnVal = 1		
-	return ReturnLst, ReturnVal
+def banner():
+    os.system('clear')
+    print yw + '|  | |\\  | | \\    / ' + bold + wh + '| ' + lg + 'Tools Scan Proxy Universitas'
+    print yw + '|  | | \\ | |  \\  /  ' + bold + wh + '| ' + lg + 'New Powerfull Version 1.0'
+    print yw + '\\__/ |  \\| |   \\/   ' + bold + wh + '| ' + lg + 'https://tuyul-google.blogspot.com\n' + wh
 
 
-# Used to start a scan...
-def StartScan(ph, pp, pu, pw, sm, tr, pr, tn, vr):
-	# Set the local variables
-	phost = ph
-	pport = pp
-	puser = pu
-	ppass = pw
-	smode = sm
-	targs = tr
-	ports = pr
-	numth = tn
-	verbo = vr
-	thrds = list()
-	thrun = 0
-	queue = Queue.Queue()
-	prnqu = Queue.Queue()
+def pas1():
+    os.system('clear')
+    os.system('touch pas.txt')
+    wkt = strftime('%d', localtime())
+    file = open('pas.txt', 'w')
+    file.write(str(wkt) + '00')
+    file.close()
+    pas2()
 
-	try:
 
-		PrintMsg("  * Parsing Options...", verbo)
-		(TList, TCode) = ParseIpRange(targs)
-		if TCode > 0 and len(TList) == 0:
-			print "ERROR: Could not parse targets.  Please ensure the format is correct"
-			return
-		elif TCode > 0 and len(TList) > 0:
-			PrintMsg("   + Could not parse some targets.  Continuing with what I have...", verbo)
-		else:
-			PrintMsg("   + Parsed Targets...", verbo)
-		(PList, PCode) = ParsePortRange(ports)
-		if PCode > 0 and len(PList) == 0:
-			print "ERROR: Could not parse ports.  Please ensure the format is correct"
-			return
-		elif PCode > 0 and len(PList) > 0:
-			PrintMsg("   + Could not parse some ports.  Continuing with what I have...", verbo)
-		else:
-			PrintMsg("   + Parsed Ports...", verbo)
-		PrintMsg("   + Done", verbo)
-		PrintMsg("", verbo)
-		PrintMsg("  * Scan Settings", verbo)
-	        PrintMsg("   + Scan Mode            : " + smode, verbo)
-	        PrintMsg("   + Number of targets    : " + str(len(TList)), verbo)
-	        PrintMsg("   + Number of ports      : " + str(len(PList)), verbo)
-	        PrintMsg("   + Number of threads    : " + str(numth), verbo)
-		PrintMsg("", verbo)
-		# Start the threads...
-		PrintMsg("  * Initialising Threads...", verbo)
-		for i in range(numth):
-			#thrds.append(itm)
-			itm = Scanner(phost, pport, puser, ppass, smode, queue, prnqu).start()
-			thrds.append(itm)
-			#(self, ph, pp, pu, pw, md, qu)
-			# PrintMsg("   + Starting thread " + str(i), verbo)
-		PrintMsg("   + Starting Print Manager", verbo)
-		PrintMgr = PrintStuff(prnqu).start()
-		PrintMsg("   + Done", verbo)
-		PrintMsg("", verbo)
-		# Create the queues...
-		PrintMsg("  * Initialising Queues...", verbo)
-		for i in TList:
-			for j in PList:
-				queue.put(str(i) + ":" + str(j))
-		PrintMsg("   + Done", verbo)
-		PrintMsg("", verbo)
-		# Put None at the end of the queue for each thread so that we can stop prettily...
-		for i in range(numth):
-			queue.put(None)
-	except KeyboardInterrupt:
-		print "ERROR: Keyboard interrupt detected.  Shutting down..."
-		queue = Queue.Queue()
-		prnqu = Queue.Queue()
-		for t in thrds:
-			t.KillIt()
-		for i in range(numth):
-			queue.put(None)
-		prnqu.put(None)
-	return 0
+def pas2():
+    banner()
+    tour = open('pas.txt')
+    jedug = open('session.txt')
+    tour = tour.read()
+    jedug = jedug.read()
+    if str(jedug) == str(tour):
+        os.system('clear')
+        os.system('rm -rf pas.txt')
+        rest()
+    else:
+        banner()
+        os.system('rm -rf pas.txt')
+        salah()
 
-def GMode():
-	print """         ________                                        __
-        / ____  /  ____     __      ______      __      / /
-       / /   /_/  /___ \   / /__   / __  /  ___/ /__   / /___
-      / / _____  ____/ /  / ___/  / /_/ /  /__  ___/  / __  /
-     / / /_  _/ / __  /  / /     / ____/     / /     / / / /
-    / /___/ /  / /_/ /  / /     / /___      / /     / / / / __
-   /_______/  /_____/  /_/     /_____/     /_/     /_/ /_/ / /
------------------------------------------------------------|/---
 
-The man...  The legend... :P
-"""
-	return 0
-	
+def salah():
+    print lr + '[!] ' + wh + 'Access Token Sudah Expire !'
+    print lr + '[\xe2\x80\xa2] ' + wh + 'Masukan Kembali Access Token..'
+    jays = raw_input(lr + '[?] ' + wh + 'Access Token ' + lr + '>>' + wh + ' ')
+    tired = open('session.txt', 'w')
+    tired.write(jays)
+    tired.close()
+    pas1()
+
+
+def new():
+    try:
+        nyenye = open('session.txt')
+        nyenye.close()
+        pas1()
+    except IOError:
+        try:
+            os.system('clear')
+            banner()
+            os.system('touch session.txt')
+            print lr + '[+] ' + lc + 'Selamat Datang Sob..'
+            fix = raw_input(lr + '[?]' + wh + ' Access Token' + lr + ' >>' + wh + ' ')
+            bre = open('session.txt', 'w')
+            bre.write(fix)
+            bre.close()
+            pas1()
+        except KeyboardInterrupt:
+            print lr + '[!] ' + wh + 'Exit..\n'
+            sys.exit()
+
 
 def main():
-	# Proxy Variables
-	phost = ""
-	pport = -1
-	puser = ""
-	ppass = ""
-	pauth = False
+    try:
+        os.system('clear')
+        banner()
+        print lr + '[\xe2\x80\xa2] ' + wh + 'Ex: ' + wh + '111.223.252'
+        ip = raw_input(lr + '[?] ' + wh + 'Proxy ' + lr + '>>' + wh + ' ')
+        port = raw_input(lr + '[?] ' + wh + 'Port  ' + lr + '>>' + wh + ' ')
+        print lr + '[+] ' + wh + 'Start Checking..\n'
+    except KeyboardInterrupt:
+        print lr + '[!] ' + bold + wh + 'Exit..\n'
+        sys.exit()
 
-	# Tunnel Variables
-	lhost = ""
-	lport = -1
-	rhost = ""
-	rport = -1
+    os.system('touch open.txt')
+    os.system('touch close.txt')
+    os.system('touch sakti.txt')
+    sk = open('sakti.txt', 'w')
+    op = open('open.txt', 'w')
+    cl = open('close.txt', 'w')
+    a = 0
+    wkt = strftime('%H:%M', localtime())
+    while a <= 255:
+        try:
+            ngab = requests.get('http://' + ip + '.' + str(a) + ':' + port, timeout=2)
+            pr = ip + '.' + str(a) + ':' + port
+            jos = ngab.status_code
+            if ngab.status_code == 200:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open (200)'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 301:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open (301)'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 307:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open (307)'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 404:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 302:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open (302)'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 403:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lr + 'close (403)'
+                a += 1
+                cl.write(pr + '\n')
+            elif ngab.status_code == 401:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + yw + 'sakti (401)'
+                a += 1
+                sk.write(pr + '\n')
+            elif ngab.status_code == 503:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open (503)'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 508:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open'
+                a += 1
+                op.write(pr + '\n')
+            else:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open'
+                a += 1
+                op.write(pr + '\n')
+        except requests.exceptions.Timeout:
+            a += 1
+            print wh + '[' + lg + wkt + wh + '] ' + lc + ip + '.' + str(a) + ':' + port + wh + ' is ' + lr + 'close'
+            cl.write(ip + '.' + str(a) + ':' + port + '\n')
+            continue
+        except legh:
+            a += 1
+            print wh + '[' + lg + wkt + wh + '] ' + lc + ip + '.' + str(a) + ':' + port + wh + ' is ' + lr + 'close'
+            cl.write(ip + '.' + str(a) + ':' + port + '\n')
+            continue
+        except KeyboardInterrupt as ex:
+            cl.close()
+            op.close()
+            sk.close()
+            erere()
+        except Exception as Er:
+            print Er
 
-	# Scan Variables
-	smode = ""
-	targs = ""
-	ports = ""
-	thrds = 0
-	
 
-	# Main Script Variables
-	verbo = False
-	omode = ""
+def erere():
+    jum = open('open.txt', 'r')
+    jom = open('close.txt', 'r')
+    jim = open('sakti.txt', 'r')
+    jim = jim.readlines()
+    jum = jum.readlines()
+    jom = jom.readlines()
+    print lg + '\n     Hidup' + wh + ': ' + str(len(jum)) + lr + ' Mati' + wh + ': ' + str(len(jom)) + yw + ' Sakti:' + wh + ' ' + str(len(jim)) + '\n'
+    os.system('rm -rf close.txt')
+    kaus = raw_input('    [ ' + lp + 'Tekan Enter Untuk Kembali ' + wh + ']')
+    rest()
 
-	# Print nice welcome message
-	print "SensePost MonSoen"
-	print ""
-	print "ian@sensepost.com || willem@sensepost.com"
-	print ""
-	opusg = "  %prog [options] arg1 arg2"
-	opvrs = "%prog v0.1"
-	parse = OptionParser(usage=opusg, version=opvrs)
 
-	# First, we set the main app options...
-	syst_group = OptionGroup(parse, "Main Script Settings")
-	syst_group.add_option("-m", "--mode",      dest="omode",      help="Script mode ( tunnel | scan )")
-	syst_group.add_option("-v", "--verbose",   dest="verbose",    help="Verbose Mode", action="store_true", default=False)
-	parse.add_option_group(syst_group)
+def menu():
+    try:
+        banner()
+        print '[' + lc + '01' + wh + '] Universitas Institut Teknologi Bandung'
+        print '[' + lc + '02' + wh + '] Universitas Gadjah Mada'
+        print '[' + lc + '03' + wh + '] Universitas Institut Pertanian Bogor'
+        print '[' + lc + '04' + wh + '] Universitas Pendidikan Indonesia'
+        print '[' + lc + '05' + wh + '] Universitas Pancasila'
+        print '[' + lc + '06' + wh + '] Universitas Diponegoro'
+        print '[' + lc + '07' + wh + '] Universitas Sebelas Maret'
+        print '[' + lc + '08' + wh + '] Universitas Brahwijaya'
+        print '[' + lc + '09' + wh + '] Universitas Negeri Jakarta'
+        print '[' + lc + '10' + wh + '] Universitas Airlangga'
+        print '[' + lc + '11' + wh + '] Universitas Terbuka'
+        print '[' + lc + '12' + wh + '] Universitas Padjadjaran'
+        print '[' + lc + '13' + wh + '] Universitas Negeri Yogyakarta'
+        print '[' + lc + '14' + wh + '] Universitas Gunadarma'
+        print '[' + lc + '15' + wh + '] Universitas Jendral Soedirman'
+        print '[' + lc + '16' + wh + '] Universitas Udayana'
+        print '[' + lc + '17' + wh + '] Universitas Sriwijaya'
+        print '[' + lc + '18' + wh + '] Universitas Andalas'
+        print '[' + lc + '19' + wh + '] Universitas Pelita Harapan'
+        print '[' + lc + '20' + wh + '] Universitas Pembangunan Nasional'
+        print '[' + lc + '21' + wh + '] Universitas Negeri Surabaya'
+        print '[' + lc + '22' + wh + '] Universitas Negeri Malang'
+        print '[' + lc + '23' + wh + '] Universitas Pamulang'
+        print '[' + lc + '24' + wh + '] Universitas Islam Bandung'
+        print '[' + lc + '25' + wh + '] Universitas Negeri Padang'
+        print '\n[' + lc + '00' + wh + '] Back\n'
+        o = raw_input(lr + '[?] ' + wh + 'Choice ' + lr + '>>' + wh + ' ')
+        if o == '01' or o == '1':
+            ip = '167.205.1'
+            nama = 'Institut Teknologi Bandung'
+            auto(ip, nama)
+        elif o == '02' or o == '2':
+            ip = '175.111.88'
+            nama = 'Gadjah Mada'
+            auto(ip, nama)
+        elif o == '03' or o == '3':
+            ip = '202.124.205'
+            nama = 'Institut Pertanian Bogor'
+            auto(ip, nama)
+        elif o == '04' or o == '4':
+            ip = '103.23.244'
+            nama = 'Pendidikan Indonesia'
+            auto(ip, nama)
+        elif o == '05' or o == '5':
+            ip = '202.43.95'
+            nama = 'Pancasila'
+            auto(ip, nama)
+        elif o == '06' or o == '6':
+            ip = '182.255.1'
+            nama = 'Diponegoro'
+            auto(ip, nama)
+        elif o == '07' or o == '7':
+            ip = '203.6.148'
+            nama = 'Sebelas Maret'
+            auto(ip, nama)
+        elif o == '08' or o == '8':
+            ip = '175.45.184'
+            nama = 'Brahwijaya'
+            auto(ip, nama)
+        elif o == '09' or o == '9':
+            ip = '103.8.12'
+            nama = 'Negeri Jakarta'
+            auto(ip, nama)
+        elif o == '10':
+            ip = '210.57.214'
+            nama = 'Airlangga'
+            auto(ip, nama)
+        elif o == '11':
+            ip = '203.217.140'
+            nama = 'Terbuka'
+            auto(ip, nama)
+        elif o == '12':
+            ip = '111.223.252'
+            nama = 'Padjadjaran'
+            auto(ip, nama)
+        elif o == '13':
+            ip = '101.203.168'
+            nama = 'Negeri Yogyakarta'
+            auto(ip, nama)
+        elif o == '14':
+            ip = '104.237.55'
+            nama = 'Gunadarma'
+            auto(ip, nama)
+        elif o == '15':
+            ip = '103.9.22'
+            nama = 'Jendral Soedirman'
+            auto(ip, nama)
+        elif o == '16':
+            ip = '103.29.196'
+            nama = 'Udayana'
+            auto(ip, nama)
+        elif o == '17':
+            ip = '103.241.4'
+            nama = 'Sriwijaya'
+            auto(ip, nama)
+        elif o == '18':
+            ip = '103.212.43'
+            nama = 'Andalas'
+            auto(ip, nama)
+        elif o == '19':
+            ip = '122.200.10'
+            nama = 'Pelita Harapan'
+            auto(ip, nama)
+        elif o == '20':
+            ip = '103.236.192'
+            nama = 'Pembangunan Nasional'
+            auto(ip, nama)
+        elif o == '21':
+            ip = '103.242.124'
+            nama = 'Negeri Surabaya'
+            auto(ip, nama)
+        elif o == '22':
+            ip = '202.52.137'
+            nama = 'Negeri Malang'
+            auto(ip, nama)
+        elif o == '23':
+            ip = '202.137.16'
+            nama = 'Pamulang'
+            auto(ip, nama)
+        elif o == '24':
+            ip = '103.78.195'
+            nama = 'Islam Bandung'
+            auto(ip, nama)
+        elif o == '25':
+            ip = '103.216.87'
+            nama = 'Negeri Padang'
+            auto(ip, nama)
+            auto(ip, nama)
+        elif o == '00':
+            rest()
+        else:
+            print '[!] Menu Gak Ada Sob...'
+    except Exception as err:
+        print lr + '[!] ' + wh + 'Tidak Ada Internet..\n'
+        sys.exit()
+    except KeyboardInterrupt:
+        print lr + '[!] ' + wh + 'Exit..'
 
-	# Set the proxy server options group...
-	prox_group = OptionGroup(parse, "Proxy Server Options")
-	prox_group.add_option("-p", "--proxy",     dest="proxy",      help="Proxy Host:Port")
-	prox_group.add_option("-u", "--username",  dest="username",   help="Proxy Username")
-	prox_group.add_option("-w", "--password",  dest="password",   help="Proxy Password")
-	parse.add_option_group(prox_group)
 
-	# Set the tunnel options group...
-	tunn_group = OptionGroup(parse, "Tunnel Options")
-	tunn_group.add_option("-r", "--remote",    dest="remote",     help="Remote Host:Port")
-	tunn_group.add_option("-l", "--local",     dest="local",      help="Local Host:Port")
-	parse.add_option_group(tunn_group)
+def rest():
+    try:
+        os.system('clear')
+        banner()
+        print '[' + lc + '1' + wh + '] Scan Proxy Auto'
+        print '[' + lc + '2' + wh + '] Scan Proxy Manual'
+        print '[' + lc + '3' + wh + '] Exit\n'
+        oalah = raw_input(lr + '[?] ' + wh + 'Choice ' + lr + '>>' + wh + ' ')
+        if oalah == '1':
+            os.system('clear')
+            menu()
+        elif oalah == '2':
+            os.system('clear')
+            main()
+        elif oalah == '3':
+            print lr + '[\xe2\x80\xa2] ' + wh + 'Bye Sob..\n'
+            sys.exit()
+        else:
+            print lr + '[!] ' + wh + 'Menu Gak Ada Sob..'
+            sleep(1.5)
+            os.system('clear')
+            rest()
+    except KeyboardInterrupt:
+        print lr + '[!] ' + wh + 'Exit..\n'
+        sys.exit()
+    except Exception as err:
+        print lr + '\n[!] ' + wh + 'Error Sob..\n'
+        rest()
 
-	# Set the scan options group...
-	scan_group = OptionGroup(parse, "Scan Options")
-	scan_group.add_option("-s", "--scan-mode", dest="scanmode",   help="Scan mode ( connect | get )")
-	scan_group.add_option("-t", "--targets",   dest="targets",    help="Address to scan")
-	scan_group.add_option("-o", "--ports",     dest="portrange",  help="Port Range")
-	scan_group.add_option("-n", "--threads",   dest="threads",    help="Number of Threads")
-	parse.add_option_group(scan_group)
 
-	# Set the evilness group...
-	evil_group = OptionGroup(parse, "Other Options")
-	evil_group.add_option("-g", "--gp",    dest="gmode",      help="The obligatory evilness", action="store_true", default=False)
-	parse.add_option_group(evil_group)
+def auto(ip, nama):
+    try:
+        os.system('clear')
+        banner()
+        print lr + '[\xe2\x80\xa2] ' + wh + 'Universitas ' + nama
+        print lr + '[\xe2\x80\xa2] ' + wh + 'Proxy ' + lr + '>>' + wh + ' ' + ip
+        port = raw_input(lr + '[\xe2\x80\xa2] ' + wh + 'Port  ' + lr + '>>' + wh + ' ')
+        print lr + '[+] ' + wh + 'Start Checking..\n'
+    except KeyboardInterrupt:
+        print lr + '[!] ' + bold + wh + 'Exit..\n'
+        sys.exit()
 
-	# Now, we parse the variables...
-	(opt, arg) = parse.parse_args()
+    os.system('touch open.txt')
+    os.system('touch close.txt')
+    os.system('touch sakti.txt')
+    sk = open('sakti.txt', 'w')
+    op = open('open.txt', 'w')
+    cl = open('close.txt', 'w')
+    a = 0
+    wkt = strftime('%H:%M', localtime())
+    while a <= 255:
+        try:
+            ngab = requests.get('http://' + ip + '.' + str(a) + ':' + port, timeout=2)
+            pr = ip + '.' + str(a) + ':' + port
+            jos = ngab.status_code
+            if ngab.status_code == 200:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open (200)'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 301:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open (301)'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 307:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open (307)'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 404:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 302:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open (302)'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 403:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lr + 'close (403)'
+                a += 1
+                cl.write(pr + '\n')
+            elif ngab.status_code == 401:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + yw + 'sakti (401)'
+                a += 1
+                sk.write(pr + '\n')
+            elif ngab.status_code == 503:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open (503)'
+                a += 1
+                op.write(pr + '\n')
+            elif ngab.status_code == 508:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open'
+                a += 1
+                op.write(pr + '\n')
+            else:
+                print wh + '[' + lg + wkt + wh + '] ' + lc + pr + wh + ' is ' + lg + 'open'
+                a += 1
+                op.write(pr + '\n')
+        except requests.exceptions.Timeout:
+            a += 1
+            print wh + '[' + lg + wkt + wh + '] ' + lc + ip + '.' + str(a) + ':' + port + wh + ' is ' + lr + 'close'
+            cl.write(ip + '.' + str(a) + ':' + port + '\n')
+            continue
+        except legh:
+            a += 1
+            print wh + '[' + lg + wkt + wh + '] ' + lc + ip + '.' + str(a) + ':' + port + wh + ' is ' + lr + 'close'
+            cl.write(ip + '.' + str(a) + ':' + port + '\n')
+            continue
+        except KeyboardInterrupt as ex:
+            cl.close()
+            op.close()
+            sk.close()
+            erere()
+        except Exception as Er:
+            print Er
 
-	# We check the G flag first...
-	if opt.gmode == True:
-		GMode()
-		return
-	# Set the verbosity
-	verbo = opt.verbose
-	# We have to check to ensure that a operating mode has been specified.  That we will do first.
-	if opt.omode != "tunnel" and opt.omode != "scan":
-		parse.error("Invalid operating mode specified.  This should be one of: tunnel | scan")
-	omode = opt.omode
-	try:
-		(phost, pport) = str(opt.proxy).split(":")
-		pport = int(pport)
-	except:
-		parse.print_help()
-		parse.error("Invalid proxy:port specified.")
-	# And, since proxy auth is also global, lets test the user and password and set if neccessary...
-	puser = opt.username
-	ppass = opt.password
-	if puser == None:
-		puser = ""
-		pauth = False
-	else:
-		pauth = True
-	if pauth == True and ppass == None:
-		ppass = ""
 
-	# Print Startup Information
-	PrintMsg("Starting MonSoen with the following global options...", verbo)
-	PrintMsg("", verbo)
-	PrintMsg("  * MonSoen Settings", verbo)
-	PrintMsg("    + Operating Mode       : " + omode, verbo)
-	PrintMsg("", verbo)
-	PrintMsg("  * Proxy Settings", verbo)
-	PrintMsg("    + Proxy Server         : " + phost, verbo)
-	PrintMsg("    + Proxy Port           : " + str(pport), verbo)
-	PrintMsg("    + Proxy Authentication : " + str(pauth), verbo)
-	if pauth:
-		PrintMsg("    + Proxy Username       : " + puser, verbo)
-		PrintMsg("    + Proxy Password       : " + ppass, verbo)
-	PrintMsg("", verbo)
-	
-
-	# Now, things get a little more interesting...
-	# TUNNEL MODE: Lets check the variables we need...
-	if omode == "tunnel":
-		try:
-			(lhost, lport) = str(opt.local).split(":")
-			lport = int(lport)
-		except:
-			parse.error("Invalid listener-host:listener-port")
-		try:
-			(rhost, rport) = str(opt.remote).split(":")
-			rport = int(rport)
-		except:
-			parse.error("Invalid remote-host:remote-port")
-		rcode = StartTunnel(phost, pport, puser, ppass, lhost, lport, rhost, rport, verbo)
-
-	
-	# SCAN MODE: Lets check the variables we need...
-	if omode == "scan":
-
-		smode = opt.scanmode
-		if smode == None:
-			parse.error("No scan mode specified")
-		if smode != "get" and smode != "connect":
-			parse.error("Invalid scan mode specified.  Please use get | post")
-		targs = opt.targets
-		if targs == None:
-			parse.error("No targets specified.  Please specify them as host,network/netmask,host etc")
-		ports = opt.portrange
-		if ports == None:
-			parse.error("No port range specified.  Please specify port range as port,port-port etc")
-		try:
-			thrds = int(opt.threads)
-		except:
-			parse.error("Number of threads to use was incorrectly specified")
-		rcode = StartScan(phost, pport, puser, ppass, smode, targs, ports, thrds, verbo)
-	
-if __name__ == "__main__":
-	main()
+if __name__ == '__main__':
+    new()
+    erere()
