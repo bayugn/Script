@@ -1,8 +1,4 @@
-# uncompyle6 version 3.6.7
-# Python bytecode 2.7
-# Decompiled from: Python 2.7.18 (default, Jul  8 2020, 22:53:57) 
-# [GCC 4.2.1 Compatible Android (5220042 based on r346389c) Clang 8.0.7 (https://
-# Embedded file name: <febry>
+#!/usr/xbim/bash
 import os, re, requests, json, urllib, random, sys
 from time import sleep, strftime, localtime
 from bs4 import BeautifulSoup as sop
