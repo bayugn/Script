@@ -98,8 +98,8 @@ def main():
 
     os.system('touch open.txt')
     os.system('touch close.txt')
-    os.system('touch sakti.txt')
-    sk = open('sakti.txt', 'w')
+    os.system('touch good.txt')
+    sk = open('good.txt', 'w')
     op = open('open.txt', 'w')
     cl = open('close.txt', 'w')
     a = 0
