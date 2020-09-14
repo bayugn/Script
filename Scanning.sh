@@ -15,41 +15,6 @@ function banner(){
 }
 banner
 
-def pas1():
-    os.system('clear')
-    os.system('touch pas.txt')
-    wkt = strftime('%d', localtime())
-    file = open('pas.txt', 'w')
-    file.write(str(wkt) + '00')
-    file.close()
-    pas2()
-
-
-def pas2():
-    banner()
-    tour = open('pas.txt')
-    jedug = open('session.txt')
-    tour = tour.read()
-    jedug = jedug.read()
-    if str(jedug) == str(tour):
-        os.system('clear')
-        os.system('rm -rf pas.txt')
-        rest()
-    else:
-        banner()
-        os.system('rm -rf pas.txt')
-        salah()
-
-
-def salah():
-    print lr + '[!] ' + wh + 'Access Token Sudah Expire !'
-    print lr + '[\xe2\x80\xa2] ' + wh + 'Masukan Kembali Access Token..'
-    jays = raw_input(lr + '[?] ' + wh + 'Access Token ' + lr + '>>' + wh + ' ')
-    tired = open('session.txt', 'w')
-    tired.write(jays)
-    tired.close()
-    pas1()
-
 
 def new():
     try:
