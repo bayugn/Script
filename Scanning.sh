@@ -1,12 +1,16 @@
-# uncompyle6 version 3.6.7
-# Python bytecode 2.7
-# Decompiled from: Python 2.7.18 (default, Jul  8 2020, 22:53:57) 
-# [GCC 4.2.1 Compatible Android (5220042 based on r346389c) Clang 8.0.7 (https://
-# Embedded file name: <febry>
-import os, re, requests, json, urllib, random, sys
-from time import sleep, strftime, localtime
-from bs4 import BeautifulSoup as sop
-from requests.exceptions import ConnectionError as legh
+#coding:utf8
+from os import sys, system
+import socket
+from re import findall
+from time import sleep
+try:
+    import requests
+except ImportError:
+    print "[!] Modul Requests tidak ditemukan [!]"
+    print "[!] pip install requests [!]"
+    sys.exit(0)
+reload(sys)
+sys.setdefaultencoding('utf8')
 bl = '\x1b[0;34m'
 dg = '\x1b[1;30m'
 lb = '\x1b[1;34m'
