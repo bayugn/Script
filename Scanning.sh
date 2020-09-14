@@ -1,35 +1,19 @@
-#coding:utf8
-from os import sys, system
-import socket
-from re import findall
-from time import sleep
-try:
-    import requests
-except ImportError:
-    print "[!] Modul Requests tidak ditemukan [!]"
-    print "[!] pip install requests [!]"
-    sys.exit(0)
-reload(sys)
-sys.setdefaultencoding('utf8')
-bl = '\x1b[0;34m'
-dg = '\x1b[1;30m'
-lb = '\x1b[1;34m'
-lg = '\x1b[1;32m'
-lc = '\x1b[1;36m'
-lr = '\x1b[1;31m'
-lp = '\x1b[1;35m'
-yw = '\x1b[1;33m'
-wh = '\x1b[1;37m'
-no = '\x1b[0m'
-bold = '\x1b[1m'
-under = '\x1b[4m'
+#!/usr/xbim/bash
+p="\033[39;1m"
+m="\033[31;1m"
+h="\033[32;1m"
 
-def banner():
-    os.system('clear')
-    print yw + '|  | |\\  | | \\    / ' + bold + wh + '| ' + lg + 'Tools Scan Proxy Universitas'
-    print yw + '|  | | \\ | |  \\  /  ' + bold + wh + '| ' + lg + 'New Powerfull Version 1.0'
-    print yw + '\\__/ |  \\| |   \\/   ' + bold + wh + '| ' + lg + 'https://tuyul-google.blogspot.com\n' + wh
-
+clear
+function banner(){
+		echo -e "\t${p}_________________________________"
+		echo -e "\t${h}  <[[=[TOOL SCANNING PROXY]=]]>"
+		echo -e "\t${p}  <[[[=[[ RYAN  CREATOR ]]=]]]>"
+		echo -e "\t${p}  <[[[=[[ TUYUL  GOOGLE ]]=]]]>"
+		echo -e "\t${p}https://tuyul-google.blogspot.com"
+		echo -e "\t${p}_________________________________"
+	   	
+}
+banner
 
 def pas1():
     os.system('clear')
